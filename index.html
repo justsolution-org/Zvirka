@@ -108,6 +108,9 @@ header{display:flex;align-items:center;padding:20px 0 32px;border-bottom:1px sol
 .toggle-switch input:checked+.toggle-track{background:var(--accent)}
 .toggle-switch input:checked+.toggle-track::after{transform:translateX(20px)}
 .toggle-state{margin-top:10px;font-size:12px;color:var(--text-sec);padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm);text-align:center}
+.toggle-divider{height:1px;background:var(--border);margin:20px 0}
+.toggle-switch input:disabled+.toggle-track{opacity:.4;cursor:not-allowed}
+.toggle-row.muted .toggle-title,.toggle-row.muted .toggle-desc{opacity:.5}
 
 /* ── Action Button ── */
 .action-btn{width:100%;padding:18px;border:none;border-radius:var(--radius);font-family:var(--font);font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:var(--transition);margin-top:8px}
@@ -184,7 +187,7 @@ footer strong{font-weight:700;letter-spacing:1px}
         <div class="title">Рік звіту</div>
         <div class="desc">Відображатиметься у назві вихідного файлу</div>
       </div>
-      <input type="number" id="year-input" class="year-input" value="2025" min="2000" max="2099">
+      <input type="number" id="year-input" class="year-input" value="2026" min="2000" max="2099">
     </div>
   </div>
 
@@ -230,6 +233,34 @@ footer strong{font-weight:700;letter-spacing:1px}
         </label>
       </div>
       <div class="toggle-state" id="toggle-all-text">Режим: всі ВП, без надходжень — 0</div>
+
+      <div class="toggle-divider"></div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-title">Розгортати зведені (ЗВП)</div>
+          <div class="toggle-desc">Показувати кожне ВП у складі ЗВП окремим рядком</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-expand">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="toggle-state" id="toggle-expand-text">Режим: зведене — один рядок (члени згорнуті)</div>
+
+      <div class="toggle-divider"></div>
+
+      <div class="toggle-row" id="zero-members-row">
+        <div class="toggle-info">
+          <div class="toggle-title">Показувати нульових членів ЗВП</div>
+          <div class="toggle-desc">Члени зведеного без надходжень (з нулями). Діє лише в розгорнутому режимі</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-zero-members" checked>
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="toggle-state" id="toggle-zero-members-text">Режим: нульові члени показуються</div>
     </div>
   </div>
 
@@ -249,8 +280,9 @@ footer strong{font-weight:700;letter-spacing:1px}
       <div class="results-grid">
         <div class="result-item"><div class="label">ВП у реєстрі</div><div class="value" id="r-total">—</div></div>
         <div class="result-item"><div class="label">З надходженнями</div><div class="value" id="r-matched">—</div></div>
+        <div class="result-item"><div class="label">Зведених (ЗВП) у звіті</div><div class="value" id="r-zvp">—</div></div>
         <div class="result-item"><div class="label">Місяців оброблено</div><div class="value" id="r-months">—</div></div>
-        <div class="result-item"><div class="label">Загальна сума за рік</div><div class="value" id="r-amount">—</div></div>
+        <div class="result-item" style="grid-column:1/-1"><div class="label">Загальна сума за рік</div><div class="value" id="r-amount">—</div></div>
       </div>
     </div>
     <button class="action-btn success" id="btn-download">Завантажити річний звіт (.xlsx)</button>
@@ -297,6 +329,8 @@ const $ = id => document.getElementById(id);
 const zoneVP = $('zone-vp'), fileVP = $('file-vp');
 const btnProcess = $('btn-process'), btnDownload = $('btn-download');
 const toggleAll = $('toggle-all'), toggleAllText = $('toggle-all-text');
+const toggleExpand = $('toggle-expand'), toggleExpandText = $('toggle-expand-text');
+const toggleZeroMembers = $('toggle-zero-members'), toggleZeroMembersText = $('toggle-zero-members-text');
 
 /* ──────────────────── Helpers ──────────────────── */
 function formatBytes(b) {
@@ -531,6 +565,9 @@ function updateProcessBtn() {
 
 buildMonthGrid();
 
+// Дефолтний звітний рік — поточний (щоб не застрягав на захардкодженому минулому)
+$('year-input').value = new Date().getFullYear();
+
 /* ──────────────────── Toggle ──────────────────── */
 toggleAll.addEventListener('change', () => {
   toggleAllText.textContent = toggleAll.checked
@@ -538,6 +575,30 @@ toggleAll.addEventListener('change', () => {
     : 'Режим: тільки ВП зі збігами в депозитних книгах';
   hideResults();
 });
+
+// Тогл "нульові члени" діє лише в розгорнутому режимі — синхронізуємо доступність
+function syncZeroMembersToggle() {
+  const on = toggleExpand.checked;
+  toggleZeroMembers.disabled = !on;
+  $('zero-members-row').classList.toggle('muted', !on);
+}
+
+toggleExpand.addEventListener('change', () => {
+  toggleExpandText.textContent = toggleExpand.checked
+    ? 'Режим: члени ЗВП — окремими рядками'
+    : 'Режим: зведене — один рядок (члени згорнуті)';
+  syncZeroMembersToggle();
+  hideResults();
+});
+
+toggleZeroMembers.addEventListener('change', () => {
+  toggleZeroMembersText.textContent = toggleZeroMembers.checked
+    ? 'Режим: нульові члени показуються'
+    : 'Режим: нульові члени приховані';
+  hideResults();
+});
+
+syncZeroMembersToggle();   // початковий стан (розгортання вимкнено → тогл неактивний)
 
 /* ──────────────────── Results ──────────────────── */
 function hideResults() { $('results-section').style.display = 'none'; resultWB = null; }
@@ -704,6 +765,7 @@ btnProcess.addEventListener('click', async () => {
 
     const vpH = vpData[vpHeaderRow].map(c => cleanStr(c));
     const vCol = {
+      zvp:      findColIndex(vpH, ['складі ЗВП']),   // "У складі ЗВП №" — parent consolidated proceeding
       vpNum:    findColIndex(vpH, ['АСВП']),
       vd:       findColIndex(vpH, ['№ ВД']),
       stanVP:   findColIndex(vpH, ['Стан ВП']),
@@ -723,8 +785,11 @@ btnProcess.addEventListener('click', async () => {
       const row = vpData[i];
       const vpNum = cleanStr(row[vCol.vpNum]);
       if (!vpNum || !/^\d+$/.test(vpNum)) continue;
+      // "У складі ЗВП №" — only treat as a parent number if it's a numeric value
+      const zvpRaw = vCol.zvp >= 0 ? cleanStr(row[vCol.zvp]) : '';
       vpRecords.push({
         vpNum,
+        zvp:      /^\d+$/.test(zvpRaw) ? zvpRaw : '',
         vd:       vCol.vd >= 0       ? cleanStr(row[vCol.vd])             : '',
         stanVP:   vCol.stanVP >= 0   ? cleanStr(row[vCol.stanVP])         : '',
         stanVD:   vCol.stanVD >= 0   ? cleanStr(row[vCol.stanVD])         : '',
@@ -771,34 +836,171 @@ btnProcess.addEventListener('click', async () => {
 
     await setProgress(75, 'Зіставлення записів...', 'Пошук збігів за номером ВП');
 
-    /* ── Stage 4: Build output rows (pivot by month) ── */
+    /* ── Stage 4: Build output rows (pivot by month) ──
+       Зведені виконавчі провадження (ЗВП): колонка "У складі ЗВП №" групує
+       окремі ВП під номером батьківського ЗВП. Кошти часто надходять у книгу
+       НА НОМЕР ЗВП, але цей номер НЕ має власного рядка в реєстрі (є лише рядки
+       членів). Зіставлення тільки за № АСВП такі гроші губить.
+
+       Два режими (перемикач "Розгортати зведені (ЗВП)"):
+       • ЗГОРНУТО (default, expandZvp=false): кожне ЗВП = ОДИН рядок, місячна
+         сума = (надходження на номер ЗВП) + (надходження на кожного члена).
+         Члени окремими рядками не виводяться.
+       • РОЗГОРНУТО (expandZvp=true): кожен член — окремий рядок зі своїми
+         надходженнями; якщо гроші надходили прямо на номер ЗВП — додається
+         окремий рядок "ЗВП (пряме)" саме з цими коштами.
+       В обох режимах сумарний підсумок однаковий і без подвійного рахунку. */
     const allMode = toggleAll.checked;
+    const expandZvp = toggleExpand.checked;
+    const showZeroMembers = toggleZeroMembers.checked;   // діє лише в розгорнутому режимі
+
+    // Згрупувати членів за номером батьківського ЗВП
+    const zvpToMembers = new Map();
+    for (const vp of vpRecords) {
+      if (vp.zvp) {
+        if (!zvpToMembers.has(vp.zvp)) zvpToMembers.set(vp.zvp, []);
+        zvpToMembers.get(vp.zvp).push(vp);
+      }
+    }
+
+    // Місячні суми надходжень для одного номера (ЗВП або № АСВП)
+    const monthSumsFor = num => {
+      const arr = [];
+      for (let m = 1; m <= 12; m++) arr.push(allDeposits[m]?.get(num) ?? 0);
+      return arr;
+    };
+    const totalOf = arr => arr.reduce((a, s) => a + s, 0);
+    // Унікальні непорожні значення через роздільник
+    const uniqJoin = (vals, sep) => [...new Set(vals.map(cleanStr).filter(Boolean))].join(sep);
+    // Збірка рядка під фіксовану схему колонок (23 колонки)
+    const mkRow = (id, type, vd, stanVP, stanVD, dateOpen, amount, debtor, creditor, monthSums, yearTotal, note) =>
+      [id, type, vd, stanVP, stanVD, dateOpen, amount, debtor, creditor, ...monthSums, yearTotal, note];
+
     const outputRows = [];
     let matchedCount = 0;
     let grandTotal = 0;
+    const zvpShown = new Set();   // різні ЗВП, що потрапили у звіт
+    const emittedZvp = new Set();
 
     for (const vp of vpRecords) {
-      const monthSums = [];
-      let hasAny = false;
-      let vpYearTotal = 0;
+      if (vp.zvp) {
+        // Групу обробляємо один раз — на першому члені
+        if (emittedZvp.has(vp.zvp)) continue;
+        emittedZvp.add(vp.zvp);
+        const members = zvpToMembers.get(vp.zvp);
 
-      for (let m = 1; m <= 12; m++) {
-        const s = allDeposits[m]?.get(vp.vpNum) ?? 0;
-        monthSums.push(s);
-        vpYearTotal += s;
-        if (s > 0) hasAny = true;
+        if (expandZvp) {
+          /* ── РОЗГОРНУТО ──
+             • рядок "ЗВП (пряме)" — кошти, що надійшли на номер ЗВП;
+             • рядки членів: завжди ті, що отримали кошти; нульові члени —
+               лише якщо тогл "Показувати нульових членів ЗВП" увімкнено
+               (showZeroMembers, дефолт ON);
+             • ЗВП зовсім без надходжень: при "Усі ВП" або показуємо нульових
+               членів (showZeroMembers), або одним зведеним нульовим рядком. */
+          const directSums = monthSumsFor(vp.zvp);
+          const directTotal = totalOf(directSums);
+          const memberSums = members.map(m => monthSumsFor(m.vpNum));
+          const memberTotals = memberSums.map(totalOf);
+          const groupTotal = directTotal + memberTotals.reduce((a, s) => a + s, 0);
+
+          if (groupTotal === 0) {
+            // ЗВП без жодних надходжень
+            if (!allMode) continue;            // не показуємо порожні провадження
+            zvpShown.add(vp.zvp);
+            if (showZeroMembers) {
+              // кожен член — окремим нульовим рядком
+              for (const m of members) {
+                outputRows.push(mkRow(
+                  m.vpNum, 'член ЗВП', m.vd, m.stanVP, m.stanVD, m.dateOpen, m.amount, m.debtor, m.creditor,
+                  Array(12).fill(0), 0, 'У складі ЗВП ' + vp.zvp
+                ));
+              }
+            } else {
+              // один зведений нульовий рядок
+              const amountSum = members.reduce((a, m) => a + parseNum(m.amount), 0);
+              outputRows.push(mkRow(
+                vp.zvp, 'ЗВП', '—',
+                uniqJoin(members.map(m => m.stanVP), ' / '),
+                uniqJoin(members.map(m => m.stanVD), ' / '),
+                '', amountSum,
+                uniqJoin(members.map(m => m.debtor), ' / '),
+                uniqJoin(members.map(m => m.creditor), '; '),
+                Array(12).fill(0), 0,
+                members.map(m => m.vpNum).join(', ')
+              ));
+            }
+            continue;
+          }
+
+          // ЗВП із коштами: прямі надходження на номер ЗВП
+          if (directTotal > 0) {
+            matchedCount++;
+            grandTotal += directTotal;
+            zvpShown.add(vp.zvp);
+            outputRows.push(mkRow(
+              vp.zvp, 'ЗВП (пряме)', '—',
+              uniqJoin(members.map(m => m.stanVP), ' / '),
+              uniqJoin(members.map(m => m.stanVD), ' / '),
+              '', '',
+              uniqJoin(members.map(m => m.debtor), ' / '),
+              uniqJoin(members.map(m => m.creditor), '; '),
+              directSums, directTotal,
+              'Склад: ' + members.map(m => m.vpNum).join(', ')
+            ));
+          }
+          // члени: з коштами — завжди; нульові — лише за showZeroMembers
+          members.forEach((m, idx) => {
+            const ms = memberSums[idx];
+            const mt = memberTotals[idx];
+            if (mt === 0 && !showZeroMembers) return;
+            if (mt > 0) matchedCount++;
+            grandTotal += mt;
+            zvpShown.add(vp.zvp);
+            outputRows.push(mkRow(
+              m.vpNum, 'член ЗВП', m.vd, m.stanVP, m.stanVD, m.dateOpen, m.amount, m.debtor, m.creditor,
+              ms, mt, 'У складі ЗВП ' + vp.zvp
+            ));
+          });
+        } else {
+          /* ── ЗГОРНУТО: одне ЗВП = один рядок ── */
+          const monthSums = monthSumsFor(vp.zvp);
+          for (const m of members) {
+            const ms = monthSumsFor(m.vpNum);
+            for (let i = 0; i < 12; i++) monthSums[i] += ms[i];
+          }
+          const yearTotal = totalOf(monthSums);
+          const hasAny = yearTotal > 0;
+          if (!hasAny && !allMode) continue;
+          if (hasAny) matchedCount++;
+          zvpShown.add(vp.zvp);
+          grandTotal += yearTotal;
+          const amountSum = members.reduce((a, m) => a + parseNum(m.amount), 0);
+          outputRows.push(mkRow(
+            vp.zvp, 'ЗВП', '—',
+            uniqJoin(members.map(m => m.stanVP), ' / '),
+            uniqJoin(members.map(m => m.stanVD), ' / '),
+            '', amountSum,
+            uniqJoin(members.map(m => m.debtor), ' / '),
+            uniqJoin(members.map(m => m.creditor), '; '),
+            monthSums, yearTotal,
+            members.map(m => m.vpNum).join(', ')
+          ));
+        }
+      } else {
+        /* ── Звичайне (несконсолідоване) ВП — поведінка без змін ── */
+        const monthSums = monthSumsFor(vp.vpNum);
+        const yearTotal = totalOf(monthSums);
+        const hasAny = yearTotal > 0;
+        if (!hasAny && !allMode) continue;
+        if (hasAny) matchedCount++;
+        grandTotal += yearTotal;
+        outputRows.push(mkRow(
+          vp.vpNum, '', vp.vd, vp.stanVP, vp.stanVD, vp.dateOpen, vp.amount, vp.debtor, vp.creditor,
+          monthSums, yearTotal, ''
+        ));
       }
-
-      if (!hasAny && !allMode) continue;
-      if (hasAny) matchedCount++;
-      grandTotal += vpYearTotal;
-
-      outputRows.push([
-        vp.vpNum, vp.vd, vp.stanVP, vp.stanVD, vp.dateOpen, vp.amount, vp.debtor, vp.creditor,
-        ...monthSums,
-        vpYearTotal
-      ]);
     }
+    const zvpCount = zvpShown.size;
 
     await setProgress(88, 'Зіставлення записів...', 'Знайдено ' + matchedCount + ' збігів');
     if (outputRows.length === 0) throw new Error('Результат порожній. Перевірте файли.');
@@ -807,19 +1009,21 @@ btnProcess.addEventListener('click', async () => {
     await setProgress(93, 'Формування річного звіту...', 'Створення Excel-файлу');
 
     const headers = [
-      '№ АСВП', '№ ВД', 'Стан ВП', 'Стан ВД', 'Дата відкриття ВП', 'Сума до стягнення, грн.',
+      '№ АСВП', 'Тип', '№ ВД', 'Стан ВП', 'Стан ВД', 'Дата відкриття ВП', 'Сума до стягнення, грн.',
       'Боржник', 'Стягувач',
       ...MONTHS_UA.map(m => m + ' ' + year + ', грн.'),
-      'Разом ' + year + ', грн.'
+      'Разом ' + year + ', грн.',
+      'Склад ЗВП (№ АСВП членів)'
     ];
 
     const wsData = [headers, ...outputRows];
     const outSheet = XLSX.utils.aoa_to_sheet(wsData);
     outSheet['!cols'] = [
-      { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 26 }, { wch: 16 }, { wch: 20 },
+      { wch: 14 }, { wch: 6 }, { wch: 10 }, { wch: 14 }, { wch: 26 }, { wch: 16 }, { wch: 20 },
       { wch: 32 }, { wch: 40 },
       ...Array(12).fill({ wch: 16 }),
-      { wch: 18 }
+      { wch: 18 },
+      { wch: 30 }
     ];
 
     resultWB = XLSX.utils.book_new();
@@ -829,6 +1033,7 @@ btnProcess.addEventListener('click', async () => {
 
     $('r-total').textContent   = vpRecords.length;
     $('r-matched').textContent = matchedCount;
+    $('r-zvp').textContent     = zvpCount;
     $('r-months').textContent  = activeSlots.length;
     $('r-amount').textContent  = formatUAH(grandTotal);
     $('results-section').style.display = '';
